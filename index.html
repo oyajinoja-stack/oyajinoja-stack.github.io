@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>梱包サイズ・送料逆算シミュレーター</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root{
+    --kraft:#EDE4D3;
+    --kraft-dark:#C9B896;
+    --ink:#2B2620;
+    --tape:#3D6B5C;
+    --tape-dark:#2A4A3F;
+    --alert:#D9782B;
+    --alert-bg:#FFF1E4;
+    --ok:#2F7A52;
+    --ok-bg:#EAF6EE;
+  }
+  body{ background:var(--kraft); color:var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif; }
+  .tape-strip{ background: repeating-linear-gradient(135deg, var(--tape), var(--tape) 10px, var(--tape-dark) 10px, var(--tape-dark) 20px); }
+  .box-card{ background:#FFFDF9; border:1px solid var(--kraft-dark); }
+  .tab-btn{ transition: all .15s ease; }
+  .tab-btn.active{ background:var(--tape); color:#fff; }
+  .tab-btn:not(.active){ background:#fff; color:var(--ink); }
+  input[type=number]::-webkit-inner-spin-button{ opacity:1; }
+  .adslot{ background:repeating-linear-gradient(45deg,#e5e5e5,#e5e5e5 10px,#eeeeee 10px,#eeeeee 20px); border:1px dashed #b0b0b0; color:#8a8a8a; }
+  .plan-row.fits{ border-left:4px solid var(--ok); }
+  .plan-row.notfit{ border-left:4px solid #d8d0c0; opacity:.55; }
+  .plan-row.current{ box-shadow: 0 0 0 2px var(--tape) inset; }
+  @keyframes pop{ 0%{transform:scale(.96);opacity:0;} 100%{transform:scale(1);opacity:1;} }
+  .pop-in{ animation: pop .25s ease-out; }
+</style>
+</head>
+<body class="min-h-screen pb-10">
+
+<!-- 広告コードここに挿入（画面上部） -->
+<div class="adslot mx-auto max-w-md text-center text-xs py-3 my-2 rounded">広告スペース（上部）</div>
+<!-- /広告コードここに挿入 -->
+
+<header class="max-w-md mx-auto px-4 pt-2 pb-4 text-center">
+  <div class="tape-strip h-2 w-16 mx-auto rounded-full mb-3"></div>
+  <h1 class="text-xl font-bold leading-snug">梱包サイズ・送料逆算<br>シミュレーター</h1>
+  <p class="text-xs mt-1 opacity-70">あと少し削れば、送料がもっと安くなるかも？</p>
+</header>
+
+<main class="max-w-md mx-auto px-4 space-y-4">
+
+  <!-- 配送会社タブ -->
+  <div class="box-card rounded-2xl p-1.5 flex gap-1.5 shadow-sm">
+    <button id="tabYamato" class="tab-btn active flex-1 py-3 rounded-xl font-bold text-sm">🚚 ヤマト運輸<br><span class="font-normal text-[11px]">らくらくメルカリ便</span></button>
+    <button id="tabPost" class="tab-btn flex-1 py-3 rounded-xl font-bold text-sm">📮 日本郵便<br><span class="font-normal text-[11px]">ゆうゆうメルカリ便</span></button>
+  </div>
+
+  <!-- 入力エリア -->
+  <div class="box-card rounded-2xl p-4 shadow-sm space-y-3">
+    <div class="grid grid-cols-3 gap-2">
+      <div>
+        <label class="text-xs font-bold block mb-1">縦 (cm)</label>
+        <input id="inLen" type="number" inputmode="decimal" placeholder="0" class="w-full text-center text-lg font-bold border border-[--kraft-dark] rounded-lg py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[--tape]">
+      </div>
+      <div>
+        <label class="text-xs font-bold block mb-1">横 (cm)</label>
+        <input id="inWid" type="number" inputmode="decimal" placeholder="0" class="w-full text-center text-lg font-bold border border-[--kraft-dark] rounded-lg py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[--tape]">
+      </div>
+      <div>
+        <label class="text-xs font-bold block mb-1">高さ (cm)</label>
+        <input id="inHei" type="number" inputmode="decimal" placeholder="0" class="w-full text-center text-lg font-bold border border-[--kraft-dark] rounded-lg py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[--tape]">
+      </div>
+    </div>
+    <div>
+      <label class="text-xs font-bold block mb-1">重さ</label>
+      <div class="flex gap-2">
+        <input id="inWeight" type="number" inputmode="decimal" placeholder="0" class="flex-1 text-center text-lg font-bold border border-[--kraft-dark] rounded-lg py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[--tape]">
+        <div class="flex rounded-lg overflow-hidden border border-[--kraft-dark]">
+          <button id="unitG" class="unit-btn px-3 font-bold text-sm bg-[--tape] text-white">g</button>
+          <button id="unitKg" class="unit-btn px-3 font-bold text-sm bg-white">kg</button>
+        </div>
+      </div>
+    </div>
+    <button id="calcBtn" class="w-full bg-[--tape] hover:bg-[--tape-dark] active:scale-[.98] transition text-white font-bold text-base py-3.5 rounded-xl shadow-sm">判定する</button>
+  </div>
+
+  <!-- 結果エリア -->
+  <div id="resultArea" class="space-y-3"></div>
+
+  <!-- おすすめグッズ（アフィリエイトリンク） -->
+  <div class="box-card rounded-2xl p-4 shadow-sm">
+    <p class="text-xs font-bold opacity-60 mb-2">メルカリ発送に便利なおすすめグッズ</p>
+    <div class="space-y-2">
+      <a href="https://link.amazon/B09mUClgW" target="_blank" rel="noopener sponsored"
+         class="flex items-center justify-between gap-3 rounded-xl px-4 py-3 bg-white border border-[--kraft-dark] hover:bg-[--kraft] active:scale-[.98] transition">
+        <span class="text-sm font-medium leading-snug">【翌日届く】厚さ測定定規・ネコポス対応（Amazon）</span>
+        <span class="text-lg shrink-0">›</span>
+      </a>
+      <a href="https://a.r10.to/hPsmyl" target="_blank" rel="noopener sponsored"
+         class="flex items-center justify-between gap-3 rounded-xl px-4 py-3 bg-white border border-[--kraft-dark] hover:bg-[--kraft] active:scale-[.98] transition">
+        <span class="text-sm font-medium leading-snug">【まとめ買い】格安ダンボール・資材セット（楽天市場）</span>
+        <span class="text-lg shrink-0">›</span>
+      </a>
+    </div>
+    <p class="text-[10px] opacity-50 mt-2">※ 上記はプロモーションを含みます</p>
+  </div>
+
+</main>
+
+<!-- 広告コードここに挿入（画面下部） -->
+<div class="adslot mx-auto max-w-md text-center text-xs py-3 mt-4 rounded">広告スペース（下部）</div>
+<!-- /広告コードここに挿入 -->
+
+<p class="text-center text-[11px] opacity-50 mt-4 px-6">※ 料金・サイズ規格は目安です。最新の情報は各社公式サイトでご確認ください。</p>
+
+<script>
+// ---------- 配送プラン定義（目安） ----------
+// dimLimits: 箱型に厳密な指定がある方式。dimLimits=null の場合は3辺合計(sumLimit)方式。
+const YAMATO_PLANS = [
+  {name:"ネコポス", price:210, dimLimits:[31.2,22.8,2.5], weightLimitG:1000},
+  {name:"宅急便コンパクト", price:450, dimLimits:[34,25,5], weightLimitG:4000},
+  {name:"宅急便60", price:750, sumLimit:60, weightLimitG:2000},
+  {name:"宅急便80", price:850, sumLimit:80, weightLimitG:5000},
+  {name:"宅急便100", price:1050, sumLimit:100, weightLimitG:10000},
+  {name:"宅急便120", price:1200, sumLimit:120, weightLimitG:15000},
+  {name:"宅急便140", price:1450, sumLimit:140, weightLimitG:20000},
+  {name:"宅急便160", price:1700, sumLimit:160, weightLimitG:25000},
+];
+const POST_PLANS = [
+  {name:"ゆうパケットポストmini", price:160, dimLimits:[21,17,2], weightLimitG:2000},
+  {name:"ゆうパケットポスト", price:215, dimLimits:[32.7,22.8,3], weightLimitG:2000},
+  {name:"ゆうパケット", price:230, dimLimits:[34,23,3], weightLimitG:1000},
+  {name:"ゆうパケットプラス", price:455, dimLimits:[24,17,7], weightLimitG:2000},
+  {name:"ゆうパック60", price:750, sumLimit:60, weightLimitG:2000},
+  {name:"ゆうパック80", price:870, sumLimit:80, weightLimitG:5000},
+  {name:"ゆうパック100", price:1070, sumLimit:100, weightLimitG:10000},
+  {name:"ゆうパック120", price:1200, sumLimit:120, weightLimitG:15000},
+  {name:"ゆうパック140", price:1450, sumLimit:140, weightLimitG:20000},
+  {name:"ゆうパック160", price:1700, sumLimit:160, weightLimitG:25000},
+  {name:"ゆうパック170", price:1900, sumLimit:170, weightLimitG:30000},
+];
+
+let currentCarrier = "yamato";
+let weightUnit = "g";
+
+document.getElementById("tabYamato").addEventListener("click", ()=>switchCarrier("yamato"));
+document.getElementById("tabPost").addEventListener("click", ()=>switchCarrier("post"));
+document.getElementById("unitG").addEventListener("click", ()=>switchUnit("g"));
+document.getElementById("unitKg").addEventListener("click", ()=>switchUnit("kg"));
+document.getElementById("calcBtn").addEventListener("click", runCalc);
+
+function switchCarrier(c){
+  currentCarrier = c;
+  document.getElementById("tabYamato").classList.toggle("active", c==="yamato");
+  document.getElementById("tabPost").classList.toggle("active", c==="post");
+  if(document.getElementById("resultArea").dataset.hasResult) runCalc();
+}
+function switchUnit(u){
+  weightUnit = u;
+  document.getElementById("unitG").classList.toggle("bg-[--tape]", u==="g");
+  document.getElementById("unitG").classList.toggle("text-white", u==="g");
+  document.getElementById("unitG").classList.toggle("bg-white", u!=="g");
+  document.getElementById("unitKg").classList.toggle("bg-[--tape]", u==="kg");
+  document.getElementById("unitKg").classList.toggle("text-white", u==="kg");
+  document.getElementById("unitKg").classList.toggle("bg-white", u!=="kg");
+}
+
+function getPlans(){ return currentCarrier==="yamato" ? YAMATO_PLANS : POST_PLANS; }
+
+// プランへの適合判定。excessが全て0以下なら適合。
+function evaluatePlan(plan, sortedDims, weightG){
+  let dimExcesses = []; // [{label, value}] 超過分(cm)。適合していれば全て<=0
+  if(plan.dimLimits){
+    const limits = [...plan.dimLimits].sort((a,b)=>b-a);
+    dimExcesses = sortedDims.map((d,i)=>({label:d.label, excess: +(d.value - limits[i]).toFixed(1)}));
+  } else {
+    const sum = sortedDims.reduce((s,d)=>s+d.value,0);
+    const excess = +(sum - plan.sumLimit).toFixed(1);
+    dimExcesses = [{label:"3辺合計", excess}];
+  }
+  const weightExcess = weightG - plan.weightLimitG;
+  const fits = dimExcesses.every(e=>e.excess<=0) && weightExcess<=0;
+  return {fits, dimExcesses, weightExcess};
+}
+
+function runCalc(){
+  const L = parseFloat(document.getElementById("inLen").value)||0;
+  const W = parseFloat(document.getElementById("inWid").value)||0;
+  const H = parseFloat(document.getElementById("inHei").value)||0;
+  const wRaw = parseFloat(document.getElementById("inWeight").value)||0;
+  const weightG = weightUnit==="kg" ? wRaw*1000 : wRaw;
+
+  const resultArea = document.getElementById("resultArea");
+  if(L<=0 || W<=0 || H<=0 || weightG<=0){
+    resultArea.innerHTML = `<div class="box-card rounded-2xl p-4 text-sm text-center opacity-70">縦・横・高さ・重さをすべて入力してください</div>`;
+    resultArea.dataset.hasResult = "";
+    return;
+  }
+  resultArea.dataset.hasResult = "1";
+
+  const dims = [{label:"縦",value:L},{label:"横",value:W},{label:"高さ",value:H}].sort((a,b)=>b.value-a.value);
+  const plans = getPlans();
+
+  const evaluated = plans.map(p=>({plan:p, ev:evaluatePlan(p, dims, weightG)}));
+  const fittingPlans = evaluated.filter(e=>e.ev.fits);
+  const current = fittingPlans.length ? fittingPlans.reduce((a,b)=> a.plan.price<b.plan.price?a:b) : null;
+
+  let html = "";
+
+  // 現在の最安プランカード
+  if(current){
+    html += `
+    <div class="box-card rounded-2xl p-4 shadow-sm pop-in">
+      <p class="text-xs font-bold opacity-60 mb-1">現在この荷姿で使える最安プラン</p>
+      <div class="flex items-end justify-between">
+        <p class="text-lg font-bold">${current.plan.name}</p>
+        <p class="text-2xl font-bold">${current.plan.price}<span class="text-sm">円</span></p>
+      </div>
+    </div>`;
+  } else {
+    const cheapestOverall = [...plans].sort((a,b)=>a.price-b.price)[0];
+    html += `
+    <div class="rounded-2xl p-4 shadow-sm pop-in" style="background:var(--alert-bg);border:1px solid var(--alert)">
+      <p class="text-sm font-bold" style="color:var(--alert)">この配送会社の規格には収まりませんでした</p>
+      <p class="text-xs mt-1 opacity-80">3辺のサイズや重さを見直すか、別の配送方法をご検討ください。</p>
+    </div>`;
+  }
+
+  // 逆算アドバイス：現在より安いプランのうち、あと一歩で届くものを探す
+  const cheaperCandidates = evaluated.filter(e=> current ? e.plan.price < current.plan.price : true);
+  let advice = null;
+  cheaperCandidates.forEach(e=>{
+    const dimNeed = e.ev.dimExcesses.reduce((s,d)=>s+Math.max(d.excess,0),0);
+    const weightNeed = Math.max(e.ev.weightExcess,0);
+    if(dimNeed<=0 && weightNeed<=0) return; // すでに適合済み(current算出に矛盾するはずだが念のため)
+    const score = dimNeed*20 + weightNeed; // 削減の「大変さ」の簡易指標
+    if(!advice || score < advice.score){
+      advice = {plan:e.plan, dimExcesses:e.ev.dimExcesses, weightExcess:e.ev.weightExcess, dimNeed, weightNeed, score};
+    }
+  });
+
+  if(advice && current){
+    const savings = current.plan.price - advice.plan.price;
+    const easy = advice.dimNeed<=3.5 && advice.weightNeed<=300;
+    const parts = [];
+    advice.dimExcesses.forEach(d=>{
+      if(d.excess>0) parts.push(`<b>${d.label}を あと${d.excess}cm</b>`);
+    });
+    if(advice.weightExcess>0) parts.push(`<b>重さを あと${Math.ceil(advice.weightExcess)}g</b>`);
+    const partsText = parts.join("、");
+
+    html += `
+    <div class="rounded-2xl p-4 shadow-sm pop-in" style="background:${easy? 'var(--ok-bg)':'var(--alert-bg)'};border:1px solid ${easy? 'var(--ok)':'var(--alert)'}">
+      <p class="text-xs font-bold mb-1" style="color:${easy?'var(--ok)':'var(--alert)'}">${easy? '💡 チャンス！もう少しで安くなります' : '📏 参考：さらに削れば安くなるプラン'}</p>
+      <p class="text-sm leading-relaxed">${partsText} 減らせば、<br><b>${advice.plan.name}（${advice.plan.price}円）</b>に収まります！</p>
+      <p class="text-sm font-bold mt-2" style="color:${easy?'var(--ok)':'var(--alert)'}">→ ${savings}円 節約できるかも</p>
+    </div>`;
+  }
+
+  // 全プラン一覧
+  html += `<div class="box-card rounded-2xl p-4 shadow-sm">
+    <p class="text-xs font-bold opacity-60 mb-2">全プラン一覧</p>
+    <div class="space-y-1.5">`;
+  plans.forEach(p=>{
+    const ev = evaluatePlan(p, dims, weightG);
+    const isCurrent = current && p.name===current.plan.name;
+    const cls = ev.fits ? "fits" : "notfit";
+    html += `
+    <div class="plan-row ${cls} ${isCurrent?'current':''} rounded-lg px-3 py-2 flex items-center justify-between bg-white">
+      <span class="text-sm font-medium">${ev.fits?'✅':'—'} ${p.name}</span>
+      <span class="text-sm font-bold">${p.price}円</span>
+    </div>`;
+  });
+  html += `</div></div>`;
+
+  resultArea.innerHTML = html;
+}
+</script>
+</body>
+</html>
